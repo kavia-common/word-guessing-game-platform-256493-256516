@@ -1,3 +1,109 @@
-from django.db import models
+from __future__ import annotations
 
-# Create your models here.
+from django.db import models
+from django.utils import timezone
+
+
+class TimeStampedModel(models.Model):
+    """Abstract base model providing created/updated timestamps."""
+    created_at = models.DateTimeField(auto_now_add=True, help_text="Time when the record was created.")
+    updated_at = models.DateTimeField(auto_now=True, help_text="Time when the record was last updated.")
+
+    class Meta:
+        abstract = True
+
+
+# PUBLIC_INTERFACE
+class Word(TimeStampedModel):
+    """A valid word that can be used as the target (answer) or a valid guess.
+
+    Fields:
+    - text: unique lowercased word text
+    - length: derived length for quick filtering
+    - is_active: whether this word can be selected as an answer
+    """
+    text = models.CharField(max_length=32, unique=True, db_index=True, help_text="Lowercase word text.")
+    length = models.PositiveSmallIntegerField(db_index=True, help_text="Length of the word.")
+    is_active = models.BooleanField(default=True, help_text="If true, can be used as an answer in new games.")
+
+    class Meta:
+        ordering = ["length", "text"]
+        verbose_name = "Word"
+        verbose_name_plural = "Words"
+
+    def save(self, *args, **kwargs):
+        # Normalize text, derive length on save
+        if self.text:
+            self.text = self.text.strip().lower()
+            self.length = len(self.text)
+        super().save(*args, **kwargs)
+
+    def __str__(self) -> str:  # pragma: no cover
+        return self.text
+
+
+# PUBLIC_INTERFACE
+class GameSession(TimeStampedModel):
+    """Represents a single play session.
+
+    Fields:
+    - target_word: the word to be guessed
+    - max_attempts: maximum number of allowed guesses
+    - is_completed: whether the game ended (win or loss)
+    - is_won: whether player guessed correctly
+    - started_at: timestamp when session started
+    - ended_at: timestamp when session ended (if completed)
+    """
+    target_word = models.ForeignKey(Word, on_delete=models.PROTECT, related_name="target_for_sessions")
+    max_attempts = models.PositiveSmallIntegerField(default=6, help_text="Max number of guesses allowed.")
+    is_completed = models.BooleanField(default=False)
+    is_won = models.BooleanField(default=False)
+    started_at = models.DateTimeField(default=timezone.now)
+    ended_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        verbose_name = "Game Session"
+        verbose_name_plural = "Game Sessions"
+
+    def mark_completed(self, won: bool) -> None:
+        """Mark the session completed and set win state."""
+        self.is_completed = True
+        self.is_won = won
+        self.ended_at = timezone.now()
+        self.save(update_fields=["is_completed", "is_won", "ended_at", "updated_at"])
+
+    def __str__(self) -> str:  # pragma: no cover
+        return f"Session #{self.pk} - target: {self.target_word.text}"
+
+
+# PUBLIC_INTERFACE
+class Guess(TimeStampedModel):
+    """A single guess made during a game session.
+
+    Fields:
+    - session: foreign key to GameSession
+    - guess_word: the guessed word text (normalized to lowercase)
+    - result: feedback pattern (e.g., 'g'/'y'/'b' like Wordle) or JSON; keep simple for now
+    - attempt_number: 1-based index of the guess within the session
+    - is_correct: whether guess equals the target
+    """
+    session = models.ForeignKey(GameSession, on_delete=models.CASCADE, related_name="guesses")
+    guess_word = models.CharField(max_length=32, help_text="Lowercase guess text.")
+    result = models.CharField(max_length=64, blank=True, default="", help_text="Feedback pattern for the guess.")
+    attempt_number = models.PositiveSmallIntegerField(help_text="1-based attempt number within the session.")
+    is_correct = models.BooleanField(default=False)
+
+    class Meta:
+        ordering = ["created_at"]
+        unique_together = (("session", "attempt_number"),)
+        verbose_name = "Guess"
+        verbose_name_plural = "Guesses"
+
+    def save(self, *args, **kwargs):
+        if self.guess_word:
+            self.guess_word = self.guess_word.strip().lower()
+        super().save(*args, **kwargs)
+
+    def __str__(self) -> str:  # pragma: no cover
+        return f"Guess {self.attempt_number} in session {self.session_id}: {self.guess_word}"
