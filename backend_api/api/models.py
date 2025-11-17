@@ -53,13 +53,45 @@ class GameSession(TimeStampedModel):
     - is_won: whether player guessed correctly
     - started_at: timestamp when session started
     - ended_at: timestamp when session ended (if completed)
+    - mode: gameplay mode identifier (e.g., classic, timed, daily)
+    - puzzle_type: type of puzzle (e.g., word, number)
+    - hints_used: number of hints consumed in this session
+    - difficulty: difficulty level (1..n) for adaptive difficulty
+    - time_limit_secs: optional per-session time limit in seconds
+    - total_time_secs: optional total elapsed time for the session in seconds
+    - player_name: optional display name for the player
     """
+    MODE_CHOICES = (
+        ("classic", "Classic"),
+        ("timed", "Timed"),
+        ("daily", "Daily"),
+        ("endless", "Endless"),
+    )
+
     target_word = models.ForeignKey(Word, on_delete=models.PROTECT, related_name="target_for_sessions")
     max_attempts = models.PositiveSmallIntegerField(default=6, help_text="Max number of guesses allowed.")
     is_completed = models.BooleanField(default=False)
     is_won = models.BooleanField(default=False)
     started_at = models.DateTimeField(default=timezone.now)
     ended_at = models.DateTimeField(null=True, blank=True)
+
+    # New gameplay fields (backward-compatible defaults)
+    mode = models.CharField(
+        max_length=16,
+        choices=MODE_CHOICES,
+        default="classic",
+        help_text="Gameplay mode identifier.",
+    )
+    puzzle_type = models.CharField(
+        max_length=32,
+        default="word",
+        help_text="Type of puzzle for this session (e.g., word, number).",
+    )
+    hints_used = models.IntegerField(default=0, help_text="Number of hints used in this session.")
+    difficulty = models.PositiveSmallIntegerField(default=1, help_text="Difficulty level (1 = easiest).")
+    time_limit_secs = models.PositiveIntegerField(null=True, blank=True, help_text="Optional time limit in seconds.")
+    total_time_secs = models.PositiveIntegerField(null=True, blank=True, help_text="Optional total time spent in seconds.")
+    player_name = models.CharField(max_length=64, null=True, blank=True, help_text="Optional player display name.")
 
     class Meta:
         ordering = ["-created_at"]
@@ -87,12 +119,15 @@ class Guess(TimeStampedModel):
     - result: feedback pattern (e.g., 'g'/'y'/'b' like Wordle) or JSON; keep simple for now
     - attempt_number: 1-based index of the guess within the session
     - is_correct: whether guess equals the target
+    - metadata: optional JSON metadata about the guess (e.g., hint usage, timing)
     """
     session = models.ForeignKey(GameSession, on_delete=models.CASCADE, related_name="guesses")
     guess_word = models.CharField(max_length=32, help_text="Lowercase guess text.")
     result = models.CharField(max_length=64, blank=True, default="", help_text="Feedback pattern for the guess.")
     attempt_number = models.PositiveSmallIntegerField(help_text="1-based attempt number within the session.")
     is_correct = models.BooleanField(default=False)
+    # Optional metadata for extensibility
+    metadata = models.JSONField(null=True, blank=True, help_text="Optional JSON metadata for the guess.")
 
     class Meta:
         ordering = ["created_at"]

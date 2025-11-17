@@ -20,9 +20,24 @@ class GuessInline(admin.TabularInline):
 
 @admin.register(GameSession)
 class GameSessionAdmin(admin.ModelAdmin):
-    list_display = ("id", "target_word", "max_attempts", "is_completed", "is_won", "started_at", "ended_at")
-    list_filter = ("is_completed", "is_won", "max_attempts")
-    search_fields = ("target_word__text",)
+    list_display = (
+        "id",
+        "target_word",
+        "mode",
+        "puzzle_type",
+        "difficulty",
+        "hints_used",
+        "max_attempts",
+        "is_completed",
+        "is_won",
+        "started_at",
+        "ended_at",
+        "player_name",
+        "time_limit_secs",
+        "total_time_secs",
+    )
+    list_filter = ("is_completed", "is_won", "max_attempts", "mode", "puzzle_type", "difficulty")
+    search_fields = ("target_word__text", "player_name")
     inlines = [GuessInline]
     readonly_fields = ("created_at", "updated_at")
 
@@ -33,3 +48,4 @@ class GuessAdmin(admin.ModelAdmin):
     list_filter = ("is_correct",)
     search_fields = ("guess_word", "session__id", "session__target_word__text")
     ordering = ("session", "attempt_number")
+    readonly_fields = ("metadata",)
