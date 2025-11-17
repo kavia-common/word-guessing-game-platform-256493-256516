@@ -4,8 +4,16 @@ from django.db import models
 from django.utils import timezone
 
 
+# PUBLIC_INTERFACE
 class TimeStampedModel(models.Model):
-    """Abstract base model providing created/updated timestamps."""
+    """Abstract base model providing created/updated timestamps.
+
+    Notes:
+        Keep this abstract model free of any logic that would access the Django
+        app registry or execute queries at module import time. Only field
+        declarations and Meta options are allowed here so that importing this
+        module does not trigger AppRegistryNotReady during Django startup.
+    """
     created_at = models.DateTimeField(auto_now_add=True, help_text="Time when the record was created.")
     updated_at = models.DateTimeField(auto_now=True, help_text="Time when the record was last updated.")
 
@@ -14,6 +22,8 @@ class TimeStampedModel(models.Model):
 
 
 # PUBLIC_INTERFACE
+# Note: Do not perform any queries or app lookups at module scope. Model fields
+# and Meta are safe; any dynamic logic should live in methods or AppConfig.ready().
 class Word(TimeStampedModel):
     """A valid word that can be used as the target (answer) or a valid guess.
 
@@ -43,6 +53,7 @@ class Word(TimeStampedModel):
 
 
 # PUBLIC_INTERFACE
+# Avoid referencing other apps' models or executing queries at import-time here.
 class GameSession(TimeStampedModel):
     """Represents a single play session.
 
@@ -110,6 +121,7 @@ class GameSession(TimeStampedModel):
 
 
 # PUBLIC_INTERFACE
+# Keep module-scope free of DB interactions; logic belongs in methods.
 class Guess(TimeStampedModel):
     """A single guess made during a game session.
 
