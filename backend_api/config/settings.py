@@ -42,12 +42,15 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
+    # Third party
     'rest_framework',
     'drf_yasg',
     'corsheaders',
+    # Local apps
     'api'
 ]
 
+# CORS middleware must be placed as high as possible, before CommonMiddleware
 MIDDLEWARE = [
     'corsheaders.middleware.CorsMiddleware',
     'django.middleware.common.CommonMiddleware',
@@ -132,7 +135,16 @@ STATIC_URL = 'static/'
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
-CORS_ALLOW_ALL_ORIGINS = True
+# Explicitly allow only the known frontend origin (do not use allow-all in production)
+CORS_ALLOWED_ORIGINS = [
+    "https://vscode-internal-13306-beta.beta01.cloud.kavia.ai:3000",
+]
+
+# If CSRF applies (e.g., using session auth or cookies), trust the frontend origin
+CSRF_TRUSTED_ORIGINS = [
+    "https://vscode-internal-13306-beta.beta01.cloud.kavia.ai:3000",
+]
+
 SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
 USE_X_FORWARDED_HOST = True
 X_FRAME_OPTIONS = 'ALLOWALL'
