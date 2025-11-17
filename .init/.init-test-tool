@@ -1,0 +1,4 @@
+{
+    "command": "python manage.py test",
+    "working_directory": "/home/kavia/workspace/code-generation/word-guessing-game-platform-256493-256516/backend_api"
+}
