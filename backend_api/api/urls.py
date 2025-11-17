@@ -8,6 +8,7 @@ from .views import (
     request_hint,
     get_modes,
     get_puzzle_types,
+    diagnostics_validate,
 )
 
 urlpatterns = [
@@ -19,4 +20,5 @@ urlpatterns = [
     path('session/<int:session_id>', get_session_detail, name='session-detail'),
     path('modes', get_modes, name='get-modes'),
     path('puzzle-types', get_puzzle_types, name='get-puzzle-types'),
+    path('diagnostics/validate', diagnostics_validate, name='diagnostics-validate'),
 ]

@@ -25,6 +25,39 @@ from .serializers import (
 from api.puzzles import get_engine, reveal_position, reveal_first_letter
 
 
+def _normalize_keys(payload: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Accept common camelCase keys from frontend and convert to snake_case expected by serializers.
+    This is defensive compatibility; frontend should be updated to send snake_case.
+
+    Supported conversions:
+      sessionId -> session_id
+      wordLength -> word_length
+      maxAttempts -> max_attempts
+      timeLimitSecs -> time_limit_secs
+      puzzleType -> puzzle_type
+      playerName -> player_name
+      attemptNumber -> attempt_number
+    """
+    if not isinstance(payload, dict):
+        return payload
+
+    mapping = {
+        "sessionId": "session_id",
+        "wordLength": "word_length",
+        "maxAttempts": "max_attempts",
+        "timeLimitSecs": "time_limit_secs",
+        "puzzleType": "puzzle_type",
+        "playerName": "player_name",
+        "attemptNumber": "attempt_number",
+    }
+    out = dict(payload)
+    for k, v in list(payload.items()):
+        if k in mapping and mapping[k] not in out:
+            out[mapping[k]] = v
+    return out
+
+
 def _session_status(session: GameSession) -> str:
     """Map DB flags to public status string."""
     if session.is_completed:
@@ -125,7 +158,8 @@ def start_game(request):
     Returns:
     - JSON with session metadata including session_id and status.
     """
-    serializer = StartGameRequestSerializer(data=request.data or {})
+    data_in = _normalize_keys(request.data or {})
+    serializer = StartGameRequestSerializer(data=data_in)
     serializer.is_valid(raise_exception=True)
     vd = serializer.validated_data
 
@@ -202,7 +236,8 @@ def submit_guess(request):
 
     Returns feedback for each letter and updates the session if won/lost.
     """
-    serializer = GuessRequestSerializer(data=request.data or {})
+    data_in = _normalize_keys(request.data or {})
+    serializer = GuessRequestSerializer(data=data_in)
     serializer.is_valid(raise_exception=True)
 
     session: GameSession = serializer.validated_data["session"]
@@ -301,7 +336,8 @@ Response:
 @permission_classes([permissions.AllowAny])
 def request_hint(request):
     """Provide a hint for the given session, enforcing session-level limits."""
-    serializer = HintRequestSerializer(data=request.data or {})
+    data_in = _normalize_keys(request.data or {})
+    serializer = HintRequestSerializer(data=data_in)
     serializer.is_valid(raise_exception=True)
     session: GameSession = serializer.validated_data["session"]
     hint_type: str = serializer.validated_data.get("type") or "reveal_position"
@@ -480,3 +516,72 @@ def get_modes(request):
 def get_puzzle_types(request):
     """List available puzzle engine types."""
     return Response(["classic", "anagram"], status=status.HTTP_200_OK)
+
+
+# PUBLIC_INTERFACE
+@swagger_auto_schema(
+    method="post",
+    operation_id="diagnostics_validate",
+    operation_summary="Diagnostics: validate payloads",
+    operation_description="""
+Validate payloads against serializers to diagnose 400 errors.
+
+Request body:
+- endpoint (string): one of start-game | guess | hint
+- payload (object): payload to validate (camelCase or snake_case accepted)
+
+Response:
+- valid (bool)
+- errors (object|null)
+- normalized_payload (object)
+""",
+    tags=["diagnostics"],
+    request_body=openapi.Schema(
+        type=openapi.TYPE_OBJECT,
+        properties={
+            "endpoint": openapi.Schema(type=openapi.TYPE_STRING),
+            "payload": openapi.Schema(type=openapi.TYPE_OBJECT),
+        },
+        required=["endpoint", "payload"],
+    ),
+    responses={200: openapi.Response("OK")},
+)
+@api_view(["POST"])
+@permission_classes([permissions.AllowAny])
+def diagnostics_validate(request):
+    """
+    Diagnostics endpoint to validate a payload against known serializers and
+    return detailed validation errors. Helps identify snake_case vs camelCase
+    mismatches and enum/range violations without performing any DB writes.
+    """
+    body = request.data or {}
+    endpoint = (body.get("endpoint") or "").strip()
+    payload = body.get("payload") or {}
+    normalized = _normalize_keys(payload)
+
+    serializer_map = {
+        "start-game": StartGameRequestSerializer,
+        "guess": GuessRequestSerializer,
+        "hint": HintRequestSerializer,
+        # allow alternate names
+        "start_game": StartGameRequestSerializer,
+        "request_hint": HintRequestSerializer,
+        "submit_guess": GuessRequestSerializer,
+    }
+    s_cls = serializer_map.get(endpoint)
+    if not s_cls:
+        return Response(
+            {"valid": False, "errors": {"endpoint": "Unknown endpoint."}, "normalized_payload": normalized},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    s = s_cls(data=normalized)
+    ok = s.is_valid()
+    return Response(
+        {
+            "valid": ok,
+            "errors": None if ok else s.errors,
+            "normalized_payload": normalized,
+        },
+        status=status.HTTP_200_OK,
+    )
