@@ -51,12 +51,12 @@ INSTALLED_APPS = [
 ]
 
 # CORS middleware must be placed as high as possible, before CommonMiddleware
+# Ensure CommonMiddleware only appears once and after CorsMiddleware
 MIDDLEWARE = [
     'corsheaders.middleware.CorsMiddleware',
-    'django.middleware.common.CommonMiddleware',
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
-    'django.middleware.common.CommonMiddleware',
+    'django.middleware.common.CommonMiddleware',  # keep a single CommonMiddleware
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
@@ -135,14 +135,45 @@ STATIC_URL = 'static/'
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
-# Explicitly allow only the known frontend origin (do not use allow-all in production)
+# CORS configuration
+# Allow local development and the running preview origins to access the API
 CORS_ALLOWED_ORIGINS = [
-    "https://vscode-internal-13306-beta.beta01.cloud.kavia.ai:3000",
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+    "https://vscode-internal-36255-beta.beta01.cloud.kavia.ai:3000",
+]
+
+# If you use cookies/session-based auth from the browser you should enable credentials.
+CORS_ALLOW_CREDENTIALS = True
+
+# Explicitly allow common headers used by the frontend including Authorization
+CORS_ALLOW_HEADERS = [
+    "accept",
+    "accept-encoding",
+    "authorization",
+    "content-type",
+    "dnt",
+    "origin",
+    "user-agent",
+    "x-csrftoken",
+    "x-requested-with",
+]
+
+# Explicitly allow standard HTTP methods
+CORS_ALLOW_METHODS = [
+    "DELETE",
+    "GET",
+    "OPTIONS",
+    "PATCH",
+    "POST",
+    "PUT",
 ]
 
 # If CSRF applies (e.g., using session auth or cookies), trust the frontend origin
 CSRF_TRUSTED_ORIGINS = [
-    "https://vscode-internal-13306-beta.beta01.cloud.kavia.ai:3000",
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+    "https://vscode-internal-36255-beta.beta01.cloud.kavia.ai:3000",
 ]
 
 SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
